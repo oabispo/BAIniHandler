@@ -1,3 +1,3 @@
-module github.com/go-BAIniHandler/BAIniHandler
+module github.com/oabispo/BAIniHandler
 
 go 1.15
