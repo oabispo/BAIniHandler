@@ -13,7 +13,7 @@ type BAIniHandler interface {
 	ReadInteger( section string, field string, defaultValue int ) ( int );
 	WriteString( section string, field string, value string );
 	WriteInteger( section string, field string, value int ); 
-	Save() ( error );
+	Save( forceRecreatingOnExist bool ) ( bool, error );
 }
 
 type baKeyValue map[string]interface{};
@@ -23,21 +23,14 @@ type BAIniHandle struct {
 	section map[string]baKeyValue
 }
 
-func NewBAIniHandler( fileName string, forceCreatingOnNotFound bool ) ( BAIniHandler, error ) {
+func NewBAIniHandler( fileName string ) ( BAIniHandler, error ) {
 	// I don´t like using defer. Forgive-me
-
-	if _, err := os.Stat( fileName );( ( err != nil ) && ( forceCreatingOnNotFound ) || ( err == nil ) ) {
+	var err error;
+	if _, err = os.Stat( fileName ); ( err == nil ) {
 		var f *os.File;
-
-		if f, err = os.Create( fileName ); ( err == nil ) {
-			f.Close();
-		} else {
-			return nil, err;
-		}
 		
-		if f, err = os.Open( fileName ); ( err != nil ) {
-			return nil, err;
-		} else {
+		if  ( err == nil ) {
+			f, err = os.Open( fileName );
 			result := &BAIniHandle{ fileName: fileName, section: make( map[string]baKeyValue ) };
 			if ( !readIniFile( f, result ) ) {
 				f.Close();
@@ -47,9 +40,8 @@ func NewBAIniHandler( fileName string, forceCreatingOnNotFound bool ) ( BAIniHan
 			}
 			return result, nil;
 		}
-	} else {
-		return nil, err;
 	}
+	return nil, err;
 }
 
 func readIniFile( file *os.File, handler *BAIniHandle ) ( bool ) {
@@ -84,19 +76,25 @@ func readIniFile( file *os.File, handler *BAIniHandle ) ( bool ) {
 	return result;
 }
 
-func ( ini * BAIniHandle ) Save()  ( error ) {
-	if file, err := os.Create( ini.fileName ); ( err == nil ) {
-		for section, content := range ini.section {			
-			fmt.Fprintf( file, fmt.Sprintf ("[%v]\n", section ) );
-			for key, value := range content {
-				fmt.Fprintf( file, fmt.Sprintf ("%v=%v\n", key, value ) );
+func ( ini * BAIniHandle ) Save( forceRecreatingOnExist bool )  ( bool, error ) {
+	_, err := os.Stat( ini.fileName );
+	exists := ( err == nil );
+
+	if ( ( !exists ) || ( exists && forceRecreatingOnExist ) ) {
+		if file, err := os.Create( ini.fileName ); ( err == nil ) {
+			for section, content := range ini.section {			
+				fmt.Fprintf( file, fmt.Sprintf ("[%v]\n", section ) );
+				for key, value := range content {
+					fmt.Fprintf( file, fmt.Sprintf ("%v=%v\n", key, value ) );
+				}
 			}
+			file.Close();
+			return true, nil;	
+		} else {
+			return false, err;
 		}
-		file.Close();
-		return nil;	
-	} else {
-		return err;
 	}
+	return false, err;
 }
 
 func( ini *BAIniHandle) readSomething( section string, field string, defaultValue interface{} ) ( interface{} ) {
